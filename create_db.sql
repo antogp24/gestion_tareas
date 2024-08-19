@@ -18,13 +18,10 @@ create table Informes(
 
 create table Estados(
 	id integer primary key,
-	nombre varchar(50) not null
+	nombre varchar(50) not null check(nombre in ('pendiente', 'en progreso', 'completada'))
 );
 
-insert into Estados values
-	(1, 'pendiente'),
-	(2, 'en progreso'),
-	(3, 'completada');
+insert into Estados values (1, 'pendiente'), (2, 'en progreso'), (3, 'completada');
 
 create table Tareas(
 	id integer primary key,
