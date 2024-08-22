@@ -20,15 +20,21 @@ class SubTask:
         self.state = state
         self.priority = priority
 
-class App(ctk.CTk):
-    def load_image(name, extension, size=None):
-        light = PIL.Image.open(f"assets/icons/{name}_light.{extension}")
-        dark = PIL.Image.open(f"assets/icons/{name}_dark.{extension}")
-        assert(dark.size == light.size)
-        if size is None:
-            size = dark.size
-        return ctk.CTkImage(light_image=light, dark_image=dark, size=size)
+def load_image(name, extension, size=None):
+    light = PIL.Image.open(f"assets/icons/{name}_light.{extension}")
+    dark = PIL.Image.open(f"assets/icons/{name}_dark.{extension}")
+    assert(dark.size == light.size)
+    if size is None:
+        size = dark.size
+    return ctk.CTkImage(light_image=light, dark_image=dark, size=size)
 
+ICONS = {
+    "go_back_arrow": load_image("go_back_arrow", "png", (30, 30)),
+    "edit": load_image("edit", "png", (30, 30)),
+    "trash": load_image("trash", "png", (30, 30)),
+}
+
+class App(ctk.CTk):
     def on_close(self):
         plt.close("all")
         self.destroy()
@@ -39,11 +45,6 @@ class App(ctk.CTk):
         self.title("Gestión de Tareas")
         self.geometry("1080x720")
 
-        # Common icons
-        self.icons = {
-            "go_back_arrow": App.load_image("go_back_arrow", "png", (30, 30)),
-            "edit": App.load_image("edit", "png", (30, 30)),
-        }
 
         # Dictionary to hold frames
         self.frames = {}
@@ -56,18 +57,25 @@ class App(ctk.CTk):
                 case Main_Task_Frame.__name__:
                     db_cursor.execute("select titulo, descripcion from Tareas where id=1")
                     titulo, descripcion = db_cursor.fetchall()[0]
+
                     db_cursor.execute("select titulo, id_estado, prioridad from Tareas where id in (select id_subtarea from Subtareas where id_tarea=1)")
                     subtareas = db_cursor.fetchall()
+
                     return F(parent=self, controller=self, titulo=titulo, descripcion=descripcion, subtareas=subtareas)
+
                 case Dashboard_Frame.__name__:
                     db_cursor.execute("select count(*) from Tareas where id_estado = (select id from Estados where nombre='completada')")
                     n_completadas = db_cursor.fetchall()[0][0]
+
                     db_cursor.execute("select count(*) from Tareas where id_estado = (select id from Estados where nombre='en progreso')")
                     n_en_progreso = db_cursor.fetchall()[0][0]
+
                     db_cursor.execute("select count(*) from Tareas where id_estado = (select id from Estados where nombre='pendiente')")
                     n_pendientes = db_cursor.fetchall()[0][0]
+
                     db_cursor.execute("select count(*) from Tareas")
                     total_tareas = db_cursor.fetchall()[0][0]
+
                     return F(parent=self, controller=self, n_completadas=n_completadas, n_en_progreso=n_en_progreso, n_pendientes=n_pendientes, total_tareas=total_tareas)
 
         screens = (Main_Task_Frame, Dashboard_Frame)
@@ -97,11 +105,34 @@ class SubTask_Widget(ctk.CTkFrame):
     def __init__(self, parent, subtarea, *args, **kwargs):
         super().__init__(parent, *args, **kwargs)
 
-        self.grid_columnconfigure(0, weight=1)
+        self.grid_columnconfigure(0, weight=0)
+        self.grid_columnconfigure(1, weight=1)
+        self.grid_columnconfigure(2, weight=0)
+
+        # state and priority frame
+        self.sapf = ctk.CTkFrame(self)
+        self.sapf.grid(row=0, column=0, padx=40, pady=20, sticky="ew")
+
+        self.state_label = ctk.CTkLabel(self.sapf, text=subtarea.state, text_color=STATE_COLORS[subtarea.state], font=ctk.CTkFont(size=12))
+        self.state_label.pack()
+
+        self.priority_label = ctk.CTkLabel(self.sapf, text=f"{subtarea.priority}", font=ctk.CTkFont(size=16))
+        self.priority_label.pack()
 
         self.title = ctk.CTkLabel(self, text=subtarea.title, font=ctk.CTkFont(weight="bold", size=20))
-        self.title.grid(row=0, column=0, padx=10, pady=10, sticky="ew")
+        self.title.grid(row=0, column=1, padx=10, pady=10, sticky="ew")
 
+        # edit icon and trash frame
+        self.eatf = ctk.CTkFrame(self)
+        self.eatf.grid(row=0, column=2, padx=40, pady=20, sticky="ew")
+
+        self.edit_sub_icon = ctk.CTkLabel(self.eatf, image=ICONS["edit"], text="")
+        self.edit_sub_icon.bind("<Button-1>", lambda _: None)
+        self.edit_sub_icon.pack(pady=10)
+
+        self.trash_sub_icon = ctk.CTkLabel(self.eatf, image=ICONS["trash"], text="")
+        self.trash_sub_icon.bind("<Button-1>", lambda _: self.destroy())
+        self.trash_sub_icon.pack(pady=10)
 
 class Main_Task_Frame(ctk.CTkFrame):
     def __init__(self, parent, controller, titulo, descripcion, subtareas):
@@ -118,7 +149,7 @@ class Main_Task_Frame(ctk.CTkFrame):
         self.grid_rowconfigure(3, weight=0) # filler space between.
         self.grid_rowconfigure(4, weight=0) # row for the go to dashboard button.
 
-        self.back_icon = ctk.CTkLabel(self, image=controller.icons["go_back_arrow"], text="")
+        self.back_icon = ctk.CTkLabel(self, image=ICONS["go_back_arrow"], text="")
         self.back_icon.grid(row=0, column=0, padx=10, pady=10, sticky="w")
 
         # db_cursor.execute("select titulo, descripcion from Tareas where id=1")
@@ -129,18 +160,12 @@ class Main_Task_Frame(ctk.CTkFrame):
         self.title_entry.insert(0, self.titulo)
         self.title_entry.grid(row=0, column=1, padx=10, pady=10)
 
-        self.edit_title_icon = ctk.CTkLabel(self, image=controller.icons["edit"], text="")
-        self.edit_title_icon.grid(row=0, column=1, padx=10, pady=10, sticky="e")
-        self.edit_title_icon.bind("<Button-1>", lambda _: self.title_entry.focus_set())
-
         self.desc_textbox = ctk.CTkTextbox(self, font=ctk.CTkFont(size=24))
         self.desc_textbox.insert("1.0", descripcion)
         self.center_description()
         self.desc_textbox.bind("<KeyRelease>", lambda _: self.center_description())
         self.desc_textbox.grid(row=1, column=1, padx=10, pady=10, sticky="nsew")
 
-        # db_cursor.execute("select titulo, id_estado, prioridad from Tareas where id in (select id_subtarea from Subtareas where id_tarea=1)")
-        # db_cursor.fetchall()
         self.subtareas = subtareas
         for i, subtarea in enumerate(subtareas):
             estado = get_estado(subtarea[1])
@@ -155,19 +180,20 @@ class Main_Task_Frame(ctk.CTkFrame):
         for index, subtarea in enumerate(subtareas):
             widget = SubTask_Widget(self.subtareas_frame, subtarea, border_color=STATE_COLORS[subtarea.state], border_width=2)
             widget.grid(row=index, column=0, padx=10, pady=10, sticky="ew")
-            edit_sub_icon = ctk.CTkLabel(self.subtareas_frame, image=controller.icons["edit"], text="")
-            edit_sub_icon.grid(row=index, column=0, padx=40, pady=20, sticky="e")
-            state_label = ctk.CTkLabel(self.subtareas_frame, text=subtarea.state, text_color=STATE_COLORS[subtarea.state], font=ctk.CTkFont(size=12))
-            state_label.grid(row=index, column=0, padx=40, pady=20, sticky="w")
-            priority_label = ctk.CTkLabel(self.subtareas_frame, text=f"{subtarea.priority}", font=ctk.CTkFont(size=16))
-            priority_label.grid(row=index, column=1, padx=40, pady=20, sticky="e")
         self.subtareas_frame.grid(row=2, column=1, padx=20, pady=20)
 
         self.go_to_dashboard_button = ctk.CTkButton(
             self,
             text="Ir al Dashboard",
             command=lambda: controller.show_frame(Dashboard_Frame.__name__))
-        self.go_to_dashboard_button.grid(row=3, column=1, pady=10)
+        self.go_to_dashboard_button.grid(row=3, column=1, padx=10, pady=10, sticky="w")
+
+        self.save_icon = ctk.CTkButton(
+            self,
+            text="Guardar",
+            command=lambda: None)
+        self.save_icon.grid(row=3, column=1, padx=10, pady=10, sticky="e")
+
 
         self.bind("<Button-1>", lambda event: self.focus_set())
 
@@ -199,7 +225,7 @@ class Dashboard_Frame(ctk.CTkFrame):
         self.grid_rowconfigure(5, weight=1) # row for chart from matplotlib.
         self.grid_rowconfigure(6, weight=0) # row for the go to dashboard button.
 
-        self.back_icon = ctk.CTkLabel(self, image=controller.icons["go_back_arrow"], text="")
+        self.back_icon = ctk.CTkLabel(self, image=ICONS["go_back_arrow"], text="")
         self.back_icon.grid(row=0, column=0, padx=10, pady=10, sticky="w")
 
         self.title_label = ctk.CTkLabel(self, text="Dashboard", font=ctk.CTkFont(weight="bold", size=36))
